@@ -69,6 +69,16 @@ docker run --gpus all --name <container name> -p 8000:8000 -p 8888:8888 <image n
 
 replace <container name> and <image name> with your container name and image name
 
+## Test import torch and GPU access
+```
+import torch
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"Device: {torch.cuda.get_device_name(0)}")
+```
+
+
 
 
 
