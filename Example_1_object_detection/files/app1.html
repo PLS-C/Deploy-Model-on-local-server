@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Image Read and Show Example</title>
+<link href="css/js_example_style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<h2>Image Read and Show Example</h2>
+<div>
+<input type="file" id="fileInput" name="fileInput" accept="image/*" />
+<button id="predict">Object detection</button>
+</div>
+<div>
+    <table cellpadding="0" cellspacing="0" width="0" border="0">
+    <tr>
+        <td>
+            <canvas id="canvasInput"></canvas>
+        </td>
+        <td>
+            <canvas id="canvasOutput"></canvas>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <div class="caption">canvasInput </div>
+        </td>
+        <td>
+            <div class="caption">canvasOutput</div>
+        </td>
+    </tr>
+    </table>
+</div>
+<script src="js/jquery-3.6.0.min.js"></script>
+<script>
+    const imageUpload = document.getElementById('fileInput');
+    const canvas = document.getElementById('canvasInput');
+    const ctx = canvas.getContext('2d');
+    
+    imageUpload.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+    img.onload = function() {
+          const canvasSize = 640;
+          canvas.width = canvasSize;
+          canvas.height = canvasSize;
+        
+          // Clear canvas before drawing
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+          // Calculate scaling factor to fit image into canvas
+          const scale = Math.min(canvasSize / img.width, canvasSize / img.height);
+          const newWidth = img.width * scale;
+          const newHeight = img.height * scale;
+        
+          // Center the image on the canvas
+          const x = (canvasSize - newWidth) / 2;
+          const y = (canvasSize - newHeight) / 2;
+        
+          ctx.drawImage(img, x, y, newWidth, newHeight);
+        };
+        
+    img.src = URL.createObjectURL(file);
+    });
+
+    
+    $(document).ready(function () {
+      $('#predict').click(function () {
+        console.log('predict')
+        const file = $('#fileInput')[0].files[0];
+
+        if (!file) {
+          alert("Please select an image.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('image', file);
+        $.ajax({
+            url: '/predict',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhrFields: {
+            responseType: 'blob'  // ⬅️ important to get image blob
+            },
+            success: function (blob) {
+            const imgURL = URL.createObjectURL(blob);
+            const img = new Image();
+            
+            img.onload = function () {
+              const canvas = document.getElementById('canvasOutput');
+              const ctx = canvas.getContext('2d');
+                const canvasSize = 640;
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+                
+                // Clear canvas before drawing
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Calculate scaling factor to fit image into canvas
+                const scale = Math.min(canvasSize / img.width, canvasSize / img.height);
+                const newWidth = img.width * scale;
+                const newHeight = img.height * scale;
+                
+                // Center the image on the canvas
+                const x = (canvasSize - newWidth) / 2;
+                const y = (canvasSize - newHeight) / 2;
+                
+                ctx.drawImage(img, x, y, newWidth, newHeight);
+                //ctx.drawImage(img, 0, 0);
+                URL.revokeObjectURL(imgURL);
+                
+            };
+            
+            img.src = imgURL;
+            },
+            error: function (xhr, status, error) {
+            console.error('Prediction Error:', error);
+            }
+            });
+      });
+    });
+</script>
+</body>
+</html>
