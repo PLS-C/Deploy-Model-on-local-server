@@ -1,6 +1,55 @@
 # Deploy-Model-on-local-server
+this example is show how to create a docker image for deploy the model with GPU on local server in windows os
+
+## ✅ Prerequisites
+- Docker desktop
+- Windows Subsystem for Linux (WSL) (Ubuntu)
+- NVIDIA GPU
+
+## 1 Check the WSL
+
+To check the Ubuntu version inside WSL via PowerShell, you can use this command:
+
+```batch
+wsl cat /etc/os-release
+```
+
+To list all installed WSL distros:
+
+```batch
+wsl --list --verbose
+```
+
+## 2 Check the docker
+
+Check docker version
+
+```batch
+ docker --version
+```
+
 ## Install Ubuntu in WSL
-1 
+1. List available WSL distros:
+Run in PowerShell:
+```power shell
+wsl --list --online
+```
+2. Install Ubuntu (e.g., Ubuntu 22.04):
+```power shell
+wsl --install -d Ubuntu-22.04
+```
+
+3. Verify installation
+- After it installs, check again:
+```batch
+wsl -l -v
+```
+
+## Install Docker desktop
+1. Go to docker.com: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+2. Download the docker desktop
+3. 
+
 ## Check the GPU
 
 PS C:\Users\PLS_2> Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, AdapterRAM
