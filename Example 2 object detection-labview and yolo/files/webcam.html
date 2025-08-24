@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenCV.js Webcam Capture</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        #container {
+            margin-top: 30px;
+            position: relative;
+            display: inline-block;
+        }
+        video, canvas {
+            border: 2px solid #333;
+            margin: 10px;
+        }
+        #overlayCanvas {
+          position: absolute;
+          top: 0;
+          left: 0;
+          pointer-events: none;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <h1>YOLO Detection with OpenCV.js</h1>
+    <div id="container">
+        <!-- Video Input Element -->
+        <video id="videoInput" height="480" width="640" autoplay></video>
+        <canvas id="overlayCanvas" width="640" height="480"></canvas>
+        <!-- Canvas for Processed Output
+        <canvas id="canvasOutput" height="480" width="640" ></canvas>
+        -->
+        <br>
+        <!-- Start and Stop Buttons -->
+        <button id="startButton">Start Camera</button>
+        <button id="stopButton" disabled>Stop Camera</button>
+    </div>
+    
+    <!-- Load OpenCV.js -->
+    <!-- <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>-->
+    <script async defer src="js/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+
+    <!-- JavaScript Code -->
+    <script>
+        let videoInput = document.getElementById('videoInput');
+        let overlayCanvas = document.getElementById('overlayCanvas');
+        let overlayCtx = overlayCanvas.getContext('2d', { willReadFrequently: true });
+        let startButton = document.getElementById('startButton');
+        let stopButton = document.getElementById('stopButton');
+
+        let streaming = false;
+        let videoStream = null;
+
+        // Start Camera
+        startButton.addEventListener('click', () => {
+            if (!streaming) {
+                navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                    .then(stream => {
+                        videoStream = stream;
+                        videoInput.srcObject = stream;
+                        videoInput.play();
+                        
+                        videoInput.onloadedmetadata = () => {
+                            resizeCanvasToVideo(); // ✅ adjust canvas to video dimensions
+                        }
+                        
+                        streaming = true;
+                        startButton.disabled = true;
+                        stopButton.disabled = false;
+                        // Process video frames using OpenCV
+                        startVideoProcessing();
+                    })
+                    .catch(err => {
+                        console.error("Error accessing webcam: " + err);
+                    });
+            }
+        });
+
+        // Stop Camera
+        stopButton.addEventListener('click', () => {
+            if (streaming) {
+                videoStream.getTracks().forEach(track => track.stop());
+                streaming = false;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                clearCanvas();
+            }
+        });
+
+        // OpenCV Ready Callback
+        function onOpenCvReady() {
+            console.log('OpenCV.js is ready');
+        }
+
+        // Process Video Frames
+        function startVideoProcessing() {
+            const FPS = 30;
+            const cap = new cv.VideoCapture(videoInput);
+            async function processFrame() {
+                try {
+                    let src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+                    let dst = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+                    cap.read(src);  // Read a frame from video
+                    //cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY); // Convert to grayscale   
+                    await sendImageUsingOpenCV(src);
+                    //src.delete();
+                    //dst.delete();
+                } catch (err) {
+                    console.error("Error processing frame: " + err);
+                }
+
+                if (streaming) {
+                    setTimeout(processFrame, 1000 / FPS); // Loop at 30 FPS
+                }
+            }
+
+            processFrame();
+        }
+
+    async function sendImageUsingOpenCV(src) {
+        // Step 1: Capture and prepare the frame
+        //let src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4); // Original RGBA image
+        let rgbChannels = new cv.MatVector(); // Vector to store R, G, B channels
+        
+        let cap = new cv.VideoCapture(videoInput);
+        cap.read(src); // Capture the frame
+        //console.log("src.Size")
+        //console.log(`Image size: Width = ${src.cols}, Height = ${src.rows}`);
+        
+        // Step 2: Split into R, G, B channels
+        cv.split(src, rgbChannels); // Splits into 4 channels (R, G, B, A)
+        let rChannel = rgbChannels.get(0); // Red channel
+        let gChannel = rgbChannels.get(1); // Green channel
+        let bChannel = rgbChannels.get(2); // Blue channel
+        //console.log(rChannel.data)
+        
+        /// Step 3: Convert Mat data to Uint8Array
+        const rData = Uint8Array.from(rChannel.data);
+        const gData = Uint8Array.from(gChannel.data);
+        const bData = Uint8Array.from(bChannel.data);
+    
+        const rows = src.rows;
+        const cols = src.cols;
+    
+        // Step 4: Reshape function
+        const reshape = (data, rows, cols) => {
+            return Array.from({ length: rows }, (_, i) =>
+                Array.from({ length: cols }, (_, j) => data[i * cols + j])
+            );
+        };
+    
+        // Step 5: Reshape to 2D
+        const reshapedR = reshape(rData, rows, cols);
+        const reshapedG = reshape(gData, rows, cols);
+        const reshapedB = reshape(bData, rows, cols);
+    
+        // Step 6: Prepare JSON payload with shape (1, 3, H, W)
+        const payload = {
+            Name: "Test",
+            instances: [[reshapedR, reshapedG, reshapedB]]
+        };
+        //console.log(payload)
+        
+        // Step 7: Cleanup to avoid memory leaks
+        src.delete();
+        rChannel.delete();
+        gChannel.delete();
+        bChannel.delete();
+        rgbChannels.delete();
+        
+        // Step 8: Send JSON to the backend
+        try {
+            const response = await fetch('http://127.0.0.1:8000/predicted_web', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+    
+            // Process the response
+            if (response.ok) {
+                const result = await response.json();
+                console.log("Response from backend:", result);
+                drawBoundingBoxes(result.bbox, result.class, result.scores);
+            } else {
+                console.error("Error from server:", response.status, response.statusText);
+            }
+        } catch (err) {
+            console.error("Error sending data to backend:", err);
+        }
+        
+    }
+
+    //Function to draw boxes on the overlay canvas
+    function drawBoundingBoxes(bboxes, classes, scores) {
+        clearCanvas();
+        overlayCtx.lineWidth = 2;
+        overlayCtx.font = "16px Arial";
+        overlayCtx.strokeStyle = "#00FF00";
+        overlayCtx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        overlayCtx.textBaseline = "top";
+        
+        for (let i = 0; i < bboxes.length; i++) {
+            let [x1, y1, x2, y2] = bboxes[i];
+            let label = `${classes[i]}: ${(scores[i] * 100).toFixed(1)}%`;
+            
+            overlayCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+            overlayCtx.fillRect(x1, y1 - 18, overlayCtx.measureText(label).width + 8, 18);
+            overlayCtx.fillStyle = "#FFFFFF";
+            overlayCtx.fillText(label, x1 + 4, y1 - 16);
+            overlayCtx.fillStyle = "rgba(0, 0, 0, 0.5)";
+      }
+    }
+
+    function clearCanvas() {
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    }
+
+    function resizeCanvasToVideo() {
+      overlayCanvas.width = videoInput.videoWidth;
+      overlayCanvas.height = videoInput.videoHeight;
+    }
+
+
+
+</script>
+</body>
+</html>
